@@ -77,6 +77,15 @@ func (e *Executor) removeSnapshot(ctx context.Context, job *apiclient.Job) (any,
 	return nil, e.docker.RemoveImage(ctx, *job.Payload, true)
 }
 
+func (e *Executor) snapshotSandbox(ctx context.Context, job *apiclient.Job) (any, error) {
+	var req dto.CreateSnapshotFromSandboxDTO
+	if err := e.parsePayload(job.Payload, &req); err != nil {
+		return nil, err
+	}
+
+	return e.docker.CreateSnapshotFromSandbox(ctx, job.ResourceId, req)
+}
+
 func (e *Executor) inspectSnapshotInRegistry(ctx context.Context, job *apiclient.Job) (any, error) {
 	var request dto.InspectSnapshotInRegistryRequestDTO
 	err := e.parsePayload(job.Payload, &request)

@@ -23,6 +23,12 @@ type InspectSnapshotInRegistryRequestDTO struct {
 	Registry *RegistryDTO `json:"registry,omitempty"`
 } //	@name	InspectSnapshotInRegistryRequest
 
+type CreateSnapshotFromSandboxDTO struct {
+	Snapshot   string      `json:"snapshot" validate:"required"`
+	Registry   RegistryDTO `json:"registry" validate:"required"`
+	SnapshotId string      `json:"snapshotId" validate:"required"`
+} //	@name	CreateSnapshotFromSandboxDTO
+
 func HashWithoutPrefix(hash string) string {
 	return strings.TrimPrefix(hash, "sha256:")
 }
