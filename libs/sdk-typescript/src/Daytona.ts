@@ -315,6 +315,7 @@ export class Daytona implements AsyncDisposable {
       configuration,
       new SnapshotsApi(configuration, '', axiosInstance),
       this.objectStorageApi,
+      this.sandboxApi,
       this.target,
     )
     this.clientConfig = configuration
@@ -575,6 +576,8 @@ export class Daytona implements AsyncDisposable {
         this.createAxiosInstance(),
         this.sandboxApi,
         codeToolbox,
+        this.snapshot,
+        (params, opts) => this.create(params, opts),
       )
 
       if (sandbox.state !== 'started') {
@@ -617,6 +620,8 @@ export class Daytona implements AsyncDisposable {
       this.createAxiosInstance(),
       this.sandboxApi,
       codeToolbox,
+      this.snapshot,
+      (params, opts) => this.create(params, opts),
     )
   }
 
@@ -678,6 +683,8 @@ export class Daytona implements AsyncDisposable {
           this.createAxiosInstance(),
           this.sandboxApi,
           this.getCodeToolbox(language),
+          this.snapshot,
+          (params, opts) => this.create(params, opts),
         )
       }),
       total: response.data.total,

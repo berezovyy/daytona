@@ -33,10 +33,12 @@ import { Git } from './Git'
 import { CodeRunParams, Process } from './Process'
 import { LspLanguageId, LspServer } from './LspServer'
 import { DaytonaError, DaytonaNotFoundError } from './errors/DaytonaError'
+import { SnapshotService, CreateSnapshotFromSandboxParams, Snapshot as SnapshotType } from './Snapshot'
 import { ComputerUse } from './ComputerUse'
 import { AxiosInstance } from 'axios'
 import { CodeInterpreter } from './CodeInterpreter'
 import { WithInstrumentation } from './utils/otel.decorator'
+import { VolumeMount } from './Daytona'
 
 /**
  * Interface defining methods that a code toolbox must implement
@@ -45,6 +47,41 @@ import { WithInstrumentation } from './utils/otel.decorator'
 export interface SandboxCodeToolbox {
   /** Generates a command to run the provided code */
   getRunCommand(code: string, params?: CodeRunParams): string
+}
+
+/**
+ * Parameters for forking a Sandbox.
+ *
+ * @interface
+ * @property {string} snapshotName - Name of the snapshot to create or reuse
+ * @property {string} [sandboxName] - Optional name for the new Sandbox
+ * @property {object} [snapshotResources] - Optional resource overrides for the snapshot
+ * @property {Record<string, string>} [envVars] - Optional environment variables for the new Sandbox
+ * @property {Record<string, string>} [labels] - Optional labels for the new Sandbox
+ * @property {string} [user] - Optional OS user for the new Sandbox
+ * @property {boolean} [public] - Whether the new Sandbox is publicly accessible
+ * @property {number} [autoStopInterval] - Auto-stop interval in minutes for the new Sandbox
+ * @property {number} [autoArchiveInterval] - Auto-archive interval in minutes for the new Sandbox
+ * @property {number} [autoDeleteInterval] - Auto-delete interval in minutes for the new Sandbox
+ * @property {VolumeMount[]} [volumes] - Optional volumes to mount to the new Sandbox
+ */
+export interface ForkSandboxParams {
+  snapshotName: string
+  sandboxName?: string
+  snapshotResources?: {
+    cpu?: number
+    gpu?: number
+    memory?: number
+    disk?: number
+  }
+  envVars?: Record<string, string>
+  labels?: Record<string, string>
+  user?: string
+  public?: boolean
+  autoStopInterval?: number
+  autoArchiveInterval?: number
+  autoDeleteInterval?: number
+  volumes?: VolumeMount[]
 }
 
 /**
@@ -137,6 +174,8 @@ export class Sandbox implements SandboxDto {
     private readonly axiosInstance: AxiosInstance,
     private readonly sandboxApi: SandboxApi,
     private readonly codeToolbox: SandboxCodeToolbox,
+    private readonly snapshotService?: SnapshotService,
+    private readonly createSandboxFn?: (params: any, options?: any) => Promise<Sandbox>,
   ) {
     this.processSandboxDto(sandboxDto)
 
@@ -700,6 +739,93 @@ export class Sandbox implements SandboxDto {
   @WithInstrumentation()
   public async validateSshAccess(token: string): Promise<SshAccessValidationDto> {
     return (await this.sandboxApi.validateSshAccess(token)).data
+  }
+
+  /**
+   * Creates a snapshot from this Sandbox. The Sandbox can be running or stopped.
+   * Polls until the snapshot reaches ACTIVE state or the timeout is exceeded.
+   *
+   * @param {CreateSnapshotFromSandboxParams} params - Parameters for snapshot creation
+   * @param {object} [options] - Options for the snapshot operation
+   * @param {number} [options.timeout] - Timeout in seconds (default is 300)
+   * @returns {Promise<SnapshotType>} The created Snapshot in ACTIVE state
+   * @throws {DaytonaError} If snapshotService is not available or snapshot creation fails
+   *
+   * @example
+   * const snapshot = await sandbox.snapshot({ name: 'my-snapshot' });
+   * console.log(`Snapshot ${snapshot.name} created`);
+   */
+  @WithInstrumentation()
+  public async createSnapshot(
+    params: CreateSnapshotFromSandboxParams,
+    options?: { timeout?: number },
+  ): Promise<SnapshotType> {
+    if (!this.snapshotService) {
+      throw new DaytonaError('snapshot() requires snapshotService to be wired — this is a SDK internal error')
+    }
+    return this.snapshotService.createFromSandbox(this.id, params, options)
+  }
+
+  /**
+   * Forks this Sandbox by creating a snapshot (if one with the given name does not
+   * already exist) and then creating a new Sandbox from that snapshot.
+   *
+   * @param {ForkSandboxParams} params - Parameters for the fork operation
+   * @param {object} [options] - Options for the fork operation
+   * @param {number} [options.snapshotTimeout] - Timeout in seconds for the snapshot step (default 300)
+   * @param {number} [options.sandboxTimeout] - Timeout in seconds for the sandbox creation step (default 60)
+   * @returns {Promise<Sandbox>} The newly created Sandbox
+   * @throws {DaytonaError} If createSandboxFn or snapshotService is not available
+   *
+   * @example
+   * const forked = await sandbox.fork({ snapshotName: 'my-fork-snapshot' });
+   * console.log(`Forked sandbox: ${forked.id}`);
+   */
+  @WithInstrumentation()
+  public async fork(
+    params: ForkSandboxParams,
+    options?: {
+      snapshotTimeout?: number
+      sandboxTimeout?: number
+    },
+  ): Promise<Sandbox> {
+    if (!this.snapshotService) {
+      throw new DaytonaError('fork() requires snapshotService to be wired — this is a SDK internal error')
+    }
+
+    let snapshot: SnapshotType
+    try {
+      snapshot = await this.snapshotService.get(params.snapshotName)
+    } catch (e) {
+      if (e instanceof DaytonaNotFoundError) {
+        snapshot = await this.createSnapshot(
+          { name: params.snapshotName, ...params.snapshotResources },
+          { timeout: options?.snapshotTimeout ?? 300 },
+        )
+      } else {
+        throw e
+      }
+    }
+
+    if (!this.createSandboxFn) {
+      throw new DaytonaError('fork() requires createSandboxFn to be wired — this is a SDK internal error')
+    }
+
+    return this.createSandboxFn(
+      {
+        snapshot: snapshot.name,
+        name: params.sandboxName,
+        user: params.user ?? this.user,
+        envVars: params.envVars,
+        labels: params.labels,
+        public: params.public,
+        autoStopInterval: params.autoStopInterval ?? this.autoStopInterval,
+        autoArchiveInterval: params.autoArchiveInterval ?? this.autoArchiveInterval,
+        autoDeleteInterval: params.autoDeleteInterval ?? this.autoDeleteInterval,
+        volumes: params.volumes,
+      },
+      { timeout: options?.sandboxTimeout ?? 60 },
+    )
   }
 
   /**

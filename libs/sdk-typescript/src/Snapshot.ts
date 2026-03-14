@@ -10,11 +10,13 @@ import {
   SnapshotState,
   CreateSnapshot,
   Configuration,
+  SandboxApi,
   PaginatedSnapshots as PaginatedSnapshotsDto,
 } from '@daytonaio/api-client'
 import { DaytonaError } from './errors/DaytonaError'
 import { Image } from './Image'
 import { Resources } from './Daytona'
+import { Sandbox } from './Sandbox'
 import { processStreamingResponse } from './utils/Stream'
 import { dynamicImport } from './utils/Import'
 import { WithInstrumentation } from './utils/otel.decorator'
@@ -72,6 +74,25 @@ export type CreateSnapshotParams = {
 }
 
 /**
+ * Parameters for creating a snapshot from an existing sandbox.
+ *
+ * @property {string} name - Name of the snapshot.
+ * @property {string} [description] - Description of the snapshot.
+ * @property {number} [cpu] - CPU cores allocated to the resulting sandbox.
+ * @property {number} [gpu] - GPU units allocated to the resulting sandbox.
+ * @property {number} [memory] - Memory allocated to the resulting sandbox in GiB.
+ * @property {number} [disk] - Disk space allocated to the resulting sandbox in GiB.
+ */
+export interface CreateSnapshotFromSandboxParams {
+  name: string
+  description?: string
+  cpu?: number
+  gpu?: number
+  memory?: number
+  disk?: number
+}
+
+/**
  * Service for managing Daytona Snapshots. Can be used to list, get, create and delete Snapshots.
  *
  * @class
@@ -81,6 +102,7 @@ export class SnapshotService {
     private clientConfig: Configuration,
     private snapshotsApi: SnapshotsApi,
     private objectStorageApi: ObjectStorageApi,
+    private sandboxApi: SandboxApi,
     private defaultRegionId?: string,
   ) {}
 
@@ -268,6 +290,81 @@ export class SnapshotService {
   @WithInstrumentation()
   async activate(snapshot: Snapshot): Promise<Snapshot> {
     return (await this.snapshotsApi.activateSnapshot(snapshot.id)).data as Snapshot
+  }
+
+  /**
+   * Creates a snapshot from an existing sandbox. The sandbox can be running or stopped.
+   * Polls until the snapshot reaches ACTIVE state or the timeout is exceeded.
+   *
+   * @param {Sandbox | string} sandbox - The Sandbox instance or sandbox ID to create a snapshot from
+   * @param {CreateSnapshotFromSandboxParams} params - Parameters for snapshot creation
+   * @param {object} [options] - Options for the create operation
+   * @param {number} [options.timeout] - Timeout in seconds (default is 300)
+   * @param {function} [options.onLogs] - Callback function to handle snapshot creation logs
+   * @returns {Promise<Snapshot>} The created Snapshot in ACTIVE state
+   * @throws {DaytonaError} If the snapshot creation fails or times out
+   *
+   * @example
+   * const daytona = new Daytona();
+   * const sandbox = await daytona.create();
+   * const snapshot = await daytona.snapshot.createFromSandbox(sandbox, { name: 'my-snapshot' });
+   * console.log(`Snapshot ${snapshot.name} created successfully`);
+   *
+   * @example
+   * // Using sandbox ID string
+   * const snapshot = await daytona.snapshot.createFromSandbox('sandbox-id', {
+   *   name: 'my-snapshot',
+   *   description: 'Snapshot with pre-installed dependencies',
+   *   cpu: 2,
+   *   memory: 4,
+   * }, { timeout: 600 });
+   */
+  @WithInstrumentation()
+  async createFromSandbox(
+    sandbox: Sandbox | string,
+    params: CreateSnapshotFromSandboxParams,
+    options?: {
+      timeout?: number
+      onLogs?: (chunk: string) => void
+    },
+  ): Promise<Snapshot> {
+    const sandboxId = typeof sandbox === 'string' ? sandbox : sandbox.id
+
+    const response = await this.sandboxApi.createSnapshotFromSandbox(sandboxId, {
+      name: params.name,
+      description: params.description,
+      cpu: params.cpu,
+      gpu: params.gpu,
+      memory: params.memory,
+      disk: params.disk,
+    })
+
+    const createdSnapshot = response.data
+    if (!createdSnapshot) {
+      throw new DaytonaError("Failed to create snapshot from sandbox. Didn't receive a snapshot from the server API.")
+    }
+
+    const snapshotName = createdSnapshot.name
+    const timeoutMs = (options?.timeout ?? 300) * 1000
+    const startTime = Date.now()
+
+    while (true) {
+      if (Date.now() - startTime > timeoutMs) {
+        throw new DaytonaError(`Snapshot creation timed out after ${options?.timeout ?? 300}s`)
+      }
+
+      const snapshot = await this.get(snapshotName)
+
+      if (snapshot.state === SnapshotState.ACTIVE) {
+        return snapshot
+      }
+
+      if (snapshot.state === SnapshotState.ERROR || snapshot.state === SnapshotState.BUILD_FAILED) {
+        throw new DaytonaError(`Snapshot creation failed: ${snapshot.errorReason}`)
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+    }
   }
 
   /**
