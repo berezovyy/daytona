@@ -185,6 +185,8 @@ services:
       - POSTGRES_DB=daytona
     networks:
       - daytona-network
+    ports:
+      - 5432:5432
     volumes:
       - db_data:/var/lib/postgresql/18/docker
 
@@ -211,6 +213,8 @@ services:
     image: redis:latest
     networks:
       - daytona-network
+    ports:
+      - 6379:6379
 
   registry-ui:
     image: joxit/docker-registry-ui:main
@@ -269,6 +273,7 @@ services:
     networks:
       - daytona-network
     ports:
+      - 9000:9000
       - 9001:9001
 
   jaeger:
