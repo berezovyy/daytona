@@ -226,13 +226,13 @@ export class SnapshotController {
     @AuthContext() authContext: OrganizationAuthContext,
     @Query() queryParams: ListSnapshotsQueryDto,
   ): Promise<PaginatedSnapshotsDto> {
-    const { page, limit, name, sort, order } = queryParams
+    const { page, limit, name, sort, order, sourceSandboxId } = queryParams
 
     const result = await this.snapshotService.getAllSnapshots(
       authContext.organizationId,
       page,
       limit,
-      { name },
+      { name, sourceSandboxId },
       { field: sort, direction: order },
     )
 

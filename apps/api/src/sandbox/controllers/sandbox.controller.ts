@@ -35,6 +35,7 @@ import {
   ApiTags,
   ApiHeader,
   ApiBearerAuth,
+  ApiBody,
 } from '@nestjs/swagger'
 import { SandboxDto, SandboxLabelsDto } from '../dto/sandbox.dto'
 import { ResizeSandboxDto } from '../dto/resize-sandbox.dto'
@@ -79,6 +80,9 @@ import { Redis } from 'ioredis'
 import { SANDBOX_EVENT_CHANNEL } from '../../common/constants/constants'
 import { RequireFlagsEnabled } from '@openfeature/nestjs-sdk'
 import { FeatureFlags } from '../../common/constants/feature-flags'
+import { SnapshotService } from '../services/snapshot.service'
+import { SnapshotDto } from '../dto/snapshot.dto'
+import { CreateSnapshotFromSandboxDto } from '../dto/create-snapshot-from-sandbox.dto'
 
 @ApiTags('sandbox')
 @Controller('sandbox')
@@ -93,6 +97,7 @@ export class SandboxController {
   constructor(
     private readonly runnerService: RunnerService,
     private readonly sandboxService: SandboxService,
+    private readonly snapshotService: SnapshotService,
     @InjectRedis() private readonly redis: Redis,
   ) {
     this.redisSubscriber = this.redis.duplicate()
@@ -667,6 +672,63 @@ export class SandboxController {
   ): Promise<SandboxDto> {
     const sandbox = await this.sandboxService.createBackup(sandboxIdOrName, authContext.organizationId)
     return this.sandboxService.toSandboxDto(sandbox)
+  }
+
+  @Post(':sandboxIdOrName/snapshot')
+  @HttpCode(200)
+  @UseInterceptors(ContentTypeInterceptor)
+  @ApiOperation({
+    summary: 'Create a snapshot from a running or stopped sandbox',
+    operationId: 'createSnapshotFromSandbox',
+  })
+  @ApiParam({
+    name: 'sandboxIdOrName',
+    description: 'ID or name of the sandbox',
+    type: 'string',
+  })
+  @ApiBody({ type: CreateSnapshotFromSandboxDto })
+  @ApiResponse({
+    status: 200,
+    description: 'The snapshot has been successfully created.',
+    type: SnapshotDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Sandbox is not in a valid state for snapshotting',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Sandbox not found',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Snapshot name already exists or concurrent operation',
+  })
+  @RequiredOrganizationResourcePermissions([OrganizationResourcePermission.WRITE_SANDBOXES])
+  @UseGuards(SandboxAccessGuard)
+  @Audit({
+    action: AuditAction.CREATE,
+    targetType: AuditTarget.SNAPSHOT,
+    targetIdFromResult: (result: SnapshotDto) => result?.id,
+    requestMetadata: {
+      body: (req: TypedRequest<CreateSnapshotFromSandboxDto>) => ({
+        name: req.body?.name,
+        description: req.body?.description,
+        cpu: req.body?.cpu,
+        gpu: req.body?.gpu,
+        memory: req.body?.memory,
+        disk: req.body?.disk,
+      }),
+    },
+  })
+  async createSnapshotFromSandbox(
+    @AuthContext() authContext: OrganizationAuthContext,
+    @Param('sandboxIdOrName') sandboxIdOrName: string,
+    @Body() dto: CreateSnapshotFromSandboxDto,
+  ): Promise<SnapshotDto> {
+    const sandbox = await this.sandboxService.findOneByIdOrName(sandboxIdOrName, authContext.organizationId)
+    const snapshot = await this.snapshotService.createFromSandbox(authContext.organization, sandbox, dto)
+    return SnapshotDto.fromSnapshot(snapshot)
   }
 
   @Post(':sandboxIdOrName/public/:isPublic')
