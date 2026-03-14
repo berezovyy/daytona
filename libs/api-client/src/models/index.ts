@@ -28,6 +28,7 @@ export * from './create-runner-response';
 export * from './create-sandbox';
 export * from './create-session-request';
 export * from './create-snapshot';
+export * from './create-snapshot-from-sandbox';
 export * from './create-user';
 export * from './create-volume';
 export * from './create-workspace';

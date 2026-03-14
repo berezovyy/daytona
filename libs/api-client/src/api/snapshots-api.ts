@@ -227,10 +227,11 @@ export const SnapshotsApiAxiosParamCreator = function (configuration?: Configura
          * @param {string} [name] Filter by partial name match
          * @param {GetAllSnapshotsSortEnum} [sort] Field to sort by
          * @param {GetAllSnapshotsOrderEnum} [order] Direction to sort by
+         * @param {string} [sourceSandboxId] Filter by source sandbox ID
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        getAllSnapshots: async (xDaytonaOrganizationID?: string, page?: number, limit?: number, name?: string, sort?: GetAllSnapshotsSortEnum, order?: GetAllSnapshotsOrderEnum, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+        getAllSnapshots: async (xDaytonaOrganizationID?: string, page?: number, limit?: number, name?: string, sort?: GetAllSnapshotsSortEnum, order?: GetAllSnapshotsOrderEnum, sourceSandboxId?: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
             const localVarPath = `/snapshots`;
             // use dummy base URL string because the URL constructor only accepts absolute URLs.
             const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
@@ -267,6 +268,10 @@ export const SnapshotsApiAxiosParamCreator = function (configuration?: Configura
 
             if (order !== undefined) {
                 localVarQueryParameter['order'] = order;
+            }
+
+            if (sourceSandboxId !== undefined) {
+                localVarQueryParameter['sourceSandboxId'] = sourceSandboxId;
             }
 
 
@@ -590,11 +595,12 @@ export const SnapshotsApiFp = function(configuration?: Configuration) {
          * @param {string} [name] Filter by partial name match
          * @param {GetAllSnapshotsSortEnum} [sort] Field to sort by
          * @param {GetAllSnapshotsOrderEnum} [order] Direction to sort by
+         * @param {string} [sourceSandboxId] Filter by source sandbox ID
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        async getAllSnapshots(xDaytonaOrganizationID?: string, page?: number, limit?: number, name?: string, sort?: GetAllSnapshotsSortEnum, order?: GetAllSnapshotsOrderEnum, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<PaginatedSnapshots>> {
-            const localVarAxiosArgs = await localVarAxiosParamCreator.getAllSnapshots(xDaytonaOrganizationID, page, limit, name, sort, order, options);
+        async getAllSnapshots(xDaytonaOrganizationID?: string, page?: number, limit?: number, name?: string, sort?: GetAllSnapshotsSortEnum, order?: GetAllSnapshotsOrderEnum, sourceSandboxId?: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<PaginatedSnapshots>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.getAllSnapshots(xDaytonaOrganizationID, page, limit, name, sort, order, sourceSandboxId, options);
             const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
             const localVarOperationServerBasePath = operationServerMap['SnapshotsApi.getAllSnapshots']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
@@ -735,11 +741,12 @@ export const SnapshotsApiFactory = function (configuration?: Configuration, base
          * @param {string} [name] Filter by partial name match
          * @param {GetAllSnapshotsSortEnum} [sort] Field to sort by
          * @param {GetAllSnapshotsOrderEnum} [order] Direction to sort by
+         * @param {string} [sourceSandboxId] Filter by source sandbox ID
          * @param {*} [options] Override http request option.
          * @throws {RequiredError}
          */
-        getAllSnapshots(xDaytonaOrganizationID?: string, page?: number, limit?: number, name?: string, sort?: GetAllSnapshotsSortEnum, order?: GetAllSnapshotsOrderEnum, options?: RawAxiosRequestConfig): AxiosPromise<PaginatedSnapshots> {
-            return localVarFp.getAllSnapshots(xDaytonaOrganizationID, page, limit, name, sort, order, options).then((request) => request(axios, basePath));
+        getAllSnapshots(xDaytonaOrganizationID?: string, page?: number, limit?: number, name?: string, sort?: GetAllSnapshotsSortEnum, order?: GetAllSnapshotsOrderEnum, sourceSandboxId?: string, options?: RawAxiosRequestConfig): AxiosPromise<PaginatedSnapshots> {
+            return localVarFp.getAllSnapshots(xDaytonaOrganizationID, page, limit, name, sort, order, sourceSandboxId, options).then((request) => request(axios, basePath));
         },
         /**
          * 
@@ -870,12 +877,13 @@ export class SnapshotsApi extends BaseAPI {
      * @param {string} [name] Filter by partial name match
      * @param {GetAllSnapshotsSortEnum} [sort] Field to sort by
      * @param {GetAllSnapshotsOrderEnum} [order] Direction to sort by
+     * @param {string} [sourceSandboxId] Filter by source sandbox ID
      * @param {*} [options] Override http request option.
      * @throws {RequiredError}
      * @memberof SnapshotsApi
      */
-    public getAllSnapshots(xDaytonaOrganizationID?: string, page?: number, limit?: number, name?: string, sort?: GetAllSnapshotsSortEnum, order?: GetAllSnapshotsOrderEnum, options?: RawAxiosRequestConfig) {
-        return SnapshotsApiFp(this.configuration).getAllSnapshots(xDaytonaOrganizationID, page, limit, name, sort, order, options).then((request) => request(this.axios, this.basePath));
+    public getAllSnapshots(xDaytonaOrganizationID?: string, page?: number, limit?: number, name?: string, sort?: GetAllSnapshotsSortEnum, order?: GetAllSnapshotsOrderEnum, sourceSandboxId?: string, options?: RawAxiosRequestConfig) {
+        return SnapshotsApiFp(this.configuration).getAllSnapshots(xDaytonaOrganizationID, page, limit, name, sort, order, sourceSandboxId, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

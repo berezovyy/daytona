@@ -24,6 +24,8 @@ import { BASE_PATH, COLLECTION_FORMATS, type RequestArgs, BaseAPI, RequiredError
 // @ts-ignore
 import type { CreateSandbox } from '../models';
 // @ts-ignore
+import type { CreateSnapshotFromSandbox } from '../models';
+// @ts-ignore
 import type { MetricsResponse } from '../models';
 // @ts-ignore
 import type { PaginatedLogs } from '../models';
@@ -41,6 +43,8 @@ import type { Sandbox } from '../models';
 import type { SandboxLabels } from '../models';
 // @ts-ignore
 import type { SignedPortPreviewUrl } from '../models';
+// @ts-ignore
+import type { SnapshotDto } from '../models';
 // @ts-ignore
 import type { SshAccessDto } from '../models';
 // @ts-ignore
@@ -187,6 +191,56 @@ export const SandboxApiAxiosParamCreator = function (configuration?: Configurati
             let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
             localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
             localVarRequestOptions.data = serializeDataIfNeeded(createSandbox, localVarRequestOptions, configuration)
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
+        /**
+         * 
+         * @summary Create a snapshot from a running or stopped sandbox
+         * @param {string} sandboxIdOrName ID or name of the sandbox
+         * @param {CreateSnapshotFromSandbox} createSnapshotFromSandbox 
+         * @param {string} [xDaytonaOrganizationID] Use with JWT to specify the organization ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        createSnapshotFromSandbox: async (sandboxIdOrName: string, createSnapshotFromSandbox: CreateSnapshotFromSandbox, xDaytonaOrganizationID?: string, options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            // verify required parameter 'sandboxIdOrName' is not null or undefined
+            assertParamExists('createSnapshotFromSandbox', 'sandboxIdOrName', sandboxIdOrName)
+            // verify required parameter 'createSnapshotFromSandbox' is not null or undefined
+            assertParamExists('createSnapshotFromSandbox', 'createSnapshotFromSandbox', createSnapshotFromSandbox)
+            const localVarPath = `/sandbox/{sandboxIdOrName}/snapshot`
+                .replace(`{${"sandboxIdOrName"}}`, encodeURIComponent(String(sandboxIdOrName)));
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'POST', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+            // authentication bearer required
+            // http bearer authentication required
+            await setBearerAuthToObject(localVarHeaderParameter, configuration)
+
+            // authentication oauth2 required
+
+
+    
+            localVarHeaderParameter['Content-Type'] = 'application/json';
+
+            if (xDaytonaOrganizationID != null) {
+                localVarHeaderParameter['X-Daytona-Organization-ID'] = String(xDaytonaOrganizationID);
+            }
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+            localVarRequestOptions.data = serializeDataIfNeeded(createSnapshotFromSandbox, localVarRequestOptions, configuration)
 
             return {
                 url: toPathString(localVarUrlObj),
@@ -1807,6 +1861,21 @@ export const SandboxApiFp = function(configuration?: Configuration) {
         },
         /**
          * 
+         * @summary Create a snapshot from a running or stopped sandbox
+         * @param {string} sandboxIdOrName ID or name of the sandbox
+         * @param {CreateSnapshotFromSandbox} createSnapshotFromSandbox 
+         * @param {string} [xDaytonaOrganizationID] Use with JWT to specify the organization ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async createSnapshotFromSandbox(sandboxIdOrName: string, createSnapshotFromSandbox: CreateSnapshotFromSandbox, xDaytonaOrganizationID?: string, options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<SnapshotDto>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.createSnapshotFromSandbox(sandboxIdOrName, createSnapshotFromSandbox, xDaytonaOrganizationID, options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['SandboxApi.createSnapshotFromSandbox']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
+        /**
+         * 
          * @summary Create SSH access for sandbox
          * @param {string} sandboxIdOrName ID or name of the sandbox
          * @param {string} [xDaytonaOrganizationID] Use with JWT to specify the organization ID
@@ -2308,6 +2377,18 @@ export const SandboxApiFactory = function (configuration?: Configuration, basePa
         },
         /**
          * 
+         * @summary Create a snapshot from a running or stopped sandbox
+         * @param {string} sandboxIdOrName ID or name of the sandbox
+         * @param {CreateSnapshotFromSandbox} createSnapshotFromSandbox 
+         * @param {string} [xDaytonaOrganizationID] Use with JWT to specify the organization ID
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        createSnapshotFromSandbox(sandboxIdOrName: string, createSnapshotFromSandbox: CreateSnapshotFromSandbox, xDaytonaOrganizationID?: string, options?: RawAxiosRequestConfig): AxiosPromise<SnapshotDto> {
+            return localVarFp.createSnapshotFromSandbox(sandboxIdOrName, createSnapshotFromSandbox, xDaytonaOrganizationID, options).then((request) => request(axios, basePath));
+        },
+        /**
+         * 
          * @summary Create SSH access for sandbox
          * @param {string} sandboxIdOrName ID or name of the sandbox
          * @param {string} [xDaytonaOrganizationID] Use with JWT to specify the organization ID
@@ -2724,6 +2805,20 @@ export class SandboxApi extends BaseAPI {
      */
     public createSandbox(createSandbox: CreateSandbox, xDaytonaOrganizationID?: string, options?: RawAxiosRequestConfig) {
         return SandboxApiFp(this.configuration).createSandbox(createSandbox, xDaytonaOrganizationID, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * 
+     * @summary Create a snapshot from a running or stopped sandbox
+     * @param {string} sandboxIdOrName ID or name of the sandbox
+     * @param {CreateSnapshotFromSandbox} createSnapshotFromSandbox 
+     * @param {string} [xDaytonaOrganizationID] Use with JWT to specify the organization ID
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof SandboxApi
+     */
+    public createSnapshotFromSandbox(sandboxIdOrName: string, createSnapshotFromSandbox: CreateSnapshotFromSandbox, xDaytonaOrganizationID?: string, options?: RawAxiosRequestConfig) {
+        return SandboxApiFp(this.configuration).createSnapshotFromSandbox(sandboxIdOrName, createSnapshotFromSandbox, xDaytonaOrganizationID, options).then((request) => request(this.axios, this.basePath));
     }
 
     /**

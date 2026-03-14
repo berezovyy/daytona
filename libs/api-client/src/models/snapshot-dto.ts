@@ -146,6 +146,12 @@ export interface SnapshotDto {
      * @memberof SnapshotDto
      */
     'ref'?: string;
+    /**
+     * ID of the sandbox this snapshot was created from, if applicable
+     * @type {string}
+     * @memberof SnapshotDto
+     */
+    'sourceSandboxId'?: string;
 }
 
 

@@ -2358,6 +2358,54 @@ paths:
       summary: Create sandbox backup
       tags:
       - sandbox
+  /sandbox/{sandboxIdOrName}/snapshot:
+    post:
+      operationId: createSnapshotFromSandbox
+      parameters:
+      - description: Use with JWT to specify the organization ID
+        explode: false
+        in: header
+        name: X-Daytona-Organization-ID
+        required: false
+        schema:
+          type: string
+        style: simple
+      - description: ID or name of the sandbox
+        explode: false
+        in: path
+        name: sandboxIdOrName
+        required: true
+        schema:
+          type: string
+        style: simple
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSnapshotFromSandbox'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SnapshotDto'
+          description: The snapshot has been successfully created.
+        "400":
+          description: Sandbox is not in a valid state for snapshotting
+        "404":
+          description: Sandbox not found
+        "409":
+          description: Snapshot name already exists or concurrent operation
+      security:
+      - bearer: []
+      - oauth2:
+        - openid
+        - profile
+        - email
+      summary: Create a snapshot from a running or stopped sandbox
+      tags:
+      - sandbox
   /sandbox/{sandboxIdOrName}/public/{isPublic}:
     post:
       operationId: updatePublicStatus
@@ -6418,6 +6466,14 @@ paths:
           enum:
           - asc
           - desc
+          type: string
+        style: form
+      - description: Filter by source sandbox ID
+        explode: true
+        in: query
+        name: sourceSandboxId
+        required: false
+        schema:
           type: string
         style: form
       responses:
@@ -10957,6 +11013,157 @@ components:
       required:
       - state
       type: object
+    CreateSnapshotFromSandbox:
+      example:
+        disk: 3
+        memory: 1
+        name: name
+        description: description
+        cpu: 1
+        gpu: 0
+      properties:
+        name:
+          description: Name for the new snapshot
+          type: string
+        description:
+          description: Description of the snapshot
+          type: string
+        cpu:
+          description: CPU cores allocated to the resulting sandbox
+          example: 1
+          type: integer
+        gpu:
+          description: GPU units allocated to the resulting sandbox
+          example: 0
+          type: integer
+        memory:
+          description: Memory allocated to the resulting sandbox in GB
+          example: 1
+          type: integer
+        disk:
+          description: Disk space allocated to the sandbox in GB
+          example: 3
+          type: integer
+      required:
+      - name
+      type: object
+    SnapshotState:
+      enum:
+      - building
+      - pending
+      - pulling
+      - active
+      - inactive
+      - error
+      - build_failed
+      - removing
+      type: string
+    SnapshotDto:
+      example:
+        imageName: imageName
+        buildInfo: ""
+        cpu: 6.027456183070403
+        regionIds:
+        - regionIds
+        - regionIds
+        gpu: 1.4658129805029452
+        organizationId: organizationId
+        general: true
+        createdAt: 2000-01-23T04:56:07.000+00:00
+        disk: 5.637376656633329
+        ref: daytonaio/sandbox:latest
+        size: 0.8008281904610115
+        mem: 5.962133916683182
+        lastUsedAt: 2000-01-23T04:56:07.000+00:00
+        entrypoint:
+        - entrypoint
+        - entrypoint
+        errorReason: errorReason
+        sourceSandboxId: sourceSandboxId
+        name: name
+        id: id
+        state: ""
+        initialRunnerId: runner123
+        updatedAt: 2000-01-23T04:56:07.000+00:00
+      properties:
+        id:
+          type: string
+        organizationId:
+          type: string
+        general:
+          type: boolean
+        name:
+          type: string
+        imageName:
+          type: string
+        state:
+          allOf:
+          - $ref: '#/components/schemas/SnapshotState'
+        size:
+          nullable: true
+          type: number
+        entrypoint:
+          items:
+            type: string
+          nullable: true
+          type: array
+        cpu:
+          type: number
+        gpu:
+          type: number
+        mem:
+          type: number
+        disk:
+          type: number
+        errorReason:
+          nullable: true
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+        lastUsedAt:
+          format: date-time
+          nullable: true
+          type: string
+        buildInfo:
+          allOf:
+          - $ref: '#/components/schemas/BuildInfo'
+          description: Build information for the snapshot
+        regionIds:
+          description: IDs of regions where the snapshot is available
+          items:
+            type: string
+          type: array
+        initialRunnerId:
+          description: The initial runner ID of the snapshot
+          example: runner123
+          type: string
+        ref:
+          description: The snapshot reference
+          example: daytonaio/sandbox:latest
+          type: string
+        sourceSandboxId:
+          description: "ID of the sandbox this snapshot was created from, if applicable"
+          type: string
+      required:
+      - cpu
+      - createdAt
+      - disk
+      - entrypoint
+      - errorReason
+      - general
+      - gpu
+      - id
+      - lastUsedAt
+      - mem
+      - name
+      - size
+      - state
+      - updatedAt
+      type: object
     PortPreviewUrl:
       example:
         sandboxId: "123456"
@@ -13097,124 +13304,11 @@ components:
       required:
       - name
       type: object
-    SnapshotState:
-      enum:
-      - building
-      - pending
-      - pulling
-      - active
-      - inactive
-      - error
-      - build_failed
-      - removing
-      type: string
-    SnapshotDto:
-      example:
-        imageName: imageName
-        buildInfo: ""
-        cpu: 6.027456183070403
-        regionIds:
-        - regionIds
-        - regionIds
-        gpu: 1.4658129805029452
-        organizationId: organizationId
-        general: true
-        createdAt: 2000-01-23T04:56:07.000+00:00
-        disk: 5.637376656633329
-        ref: daytonaio/sandbox:latest
-        size: 0.8008281904610115
-        mem: 5.962133916683182
-        lastUsedAt: 2000-01-23T04:56:07.000+00:00
-        entrypoint:
-        - entrypoint
-        - entrypoint
-        errorReason: errorReason
-        name: name
-        id: id
-        state: ""
-        initialRunnerId: runner123
-        updatedAt: 2000-01-23T04:56:07.000+00:00
-      properties:
-        id:
-          type: string
-        organizationId:
-          type: string
-        general:
-          type: boolean
-        name:
-          type: string
-        imageName:
-          type: string
-        state:
-          allOf:
-          - $ref: '#/components/schemas/SnapshotState'
-        size:
-          nullable: true
-          type: number
-        entrypoint:
-          items:
-            type: string
-          nullable: true
-          type: array
-        cpu:
-          type: number
-        gpu:
-          type: number
-        mem:
-          type: number
-        disk:
-          type: number
-        errorReason:
-          nullable: true
-          type: string
-        createdAt:
-          format: date-time
-          type: string
-        updatedAt:
-          format: date-time
-          type: string
-        lastUsedAt:
-          format: date-time
-          nullable: true
-          type: string
-        buildInfo:
-          allOf:
-          - $ref: '#/components/schemas/BuildInfo'
-          description: Build information for the snapshot
-        regionIds:
-          description: IDs of regions where the snapshot is available
-          items:
-            type: string
-          type: array
-        initialRunnerId:
-          description: The initial runner ID of the snapshot
-          example: runner123
-          type: string
-        ref:
-          description: The snapshot reference
-          example: daytonaio/sandbox:latest
-          type: string
-      required:
-      - cpu
-      - createdAt
-      - disk
-      - entrypoint
-      - errorReason
-      - general
-      - gpu
-      - id
-      - lastUsedAt
-      - mem
-      - name
-      - size
-      - state
-      - updatedAt
-      type: object
     PaginatedSnapshots:
       example:
-        total: 2.3021358869347655
-        totalPages: 9.301444243932576
-        page: 7.061401241503109
+        total: 0.8008281904610115
+        totalPages: 1.4658129805029452
+        page: 6.027456183070403
         items:
         - imageName: imageName
           buildInfo: ""
@@ -13235,6 +13329,7 @@ components:
           - entrypoint
           - entrypoint
           errorReason: errorReason
+          sourceSandboxId: sourceSandboxId
           name: name
           id: id
           state: ""
@@ -13259,6 +13354,7 @@ components:
           - entrypoint
           - entrypoint
           errorReason: errorReason
+          sourceSandboxId: sourceSandboxId
           name: name
           id: id
           state: ""
@@ -13764,6 +13860,7 @@ components:
       - INSPECT_SNAPSHOT_IN_REGISTRY
       - REMOVE_SNAPSHOT
       - UPDATE_SANDBOX_NETWORK_SETTINGS
+      - SNAPSHOT_SANDBOX
       type: string
     Job:
       example:

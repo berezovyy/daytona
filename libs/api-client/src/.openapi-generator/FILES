@@ -55,6 +55,7 @@ models/create-runner-response.ts
 models/create-runner.ts
 models/create-sandbox.ts
 models/create-session-request.ts
+models/create-snapshot-from-sandbox.ts
 models/create-snapshot.ts
 models/create-user.ts
 models/create-volume.ts

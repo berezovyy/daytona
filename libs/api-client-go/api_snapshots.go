@@ -612,6 +612,7 @@ type SnapshotsAPIGetAllSnapshotsRequest struct {
 	name *string
 	sort *string
 	order *string
+	sourceSandboxId *string
 }
 
 // Use with JWT to specify the organization ID
@@ -647,6 +648,12 @@ func (r SnapshotsAPIGetAllSnapshotsRequest) Sort(sort string) SnapshotsAPIGetAll
 // Direction to sort by
 func (r SnapshotsAPIGetAllSnapshotsRequest) Order(order string) SnapshotsAPIGetAllSnapshotsRequest {
 	r.order = &order
+	return r
+}
+
+// Filter by source sandbox ID
+func (r SnapshotsAPIGetAllSnapshotsRequest) SourceSandboxId(sourceSandboxId string) SnapshotsAPIGetAllSnapshotsRequest {
+	r.sourceSandboxId = &sourceSandboxId
 	return r
 }
 
@@ -714,6 +721,9 @@ func (a *SnapshotsAPIService) GetAllSnapshotsExecute(r SnapshotsAPIGetAllSnapsho
 	} else {
 		var defaultValue string = "desc"
 		r.order = &defaultValue
+	}
+	if r.sourceSandboxId != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "sourceSandboxId", r.sourceSandboxId, "form", "")
 	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}

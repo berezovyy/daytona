@@ -46,6 +46,8 @@ type SnapshotDto struct {
 	InitialRunnerId *string `json:"initialRunnerId,omitempty"`
 	// The snapshot reference
 	Ref *string `json:"ref,omitempty"`
+	// ID of the sandbox this snapshot was created from, if applicable
+	SourceSandboxId *string `json:"sourceSandboxId,omitempty"`
 	AdditionalProperties map[string]interface{}
 }
 
@@ -618,6 +620,38 @@ func (o *SnapshotDto) SetRef(v string) {
 	o.Ref = &v
 }
 
+// GetSourceSandboxId returns the SourceSandboxId field value if set, zero value otherwise.
+func (o *SnapshotDto) GetSourceSandboxId() string {
+	if o == nil || IsNil(o.SourceSandboxId) {
+		var ret string
+		return ret
+	}
+	return *o.SourceSandboxId
+}
+
+// GetSourceSandboxIdOk returns a tuple with the SourceSandboxId field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *SnapshotDto) GetSourceSandboxIdOk() (*string, bool) {
+	if o == nil || IsNil(o.SourceSandboxId) {
+		return nil, false
+	}
+	return o.SourceSandboxId, true
+}
+
+// HasSourceSandboxId returns a boolean if a field has been set.
+func (o *SnapshotDto) HasSourceSandboxId() bool {
+	if o != nil && !IsNil(o.SourceSandboxId) {
+		return true
+	}
+
+	return false
+}
+
+// SetSourceSandboxId gets a reference to the given string and assigns it to the SourceSandboxId field.
+func (o *SnapshotDto) SetSourceSandboxId(v string) {
+	o.SourceSandboxId = &v
+}
+
 func (o SnapshotDto) MarshalJSON() ([]byte, error) {
 	toSerialize,err := o.ToMap()
 	if err != nil {
@@ -661,6 +695,9 @@ func (o SnapshotDto) ToMap() (map[string]interface{}, error) {
 	}
 	if !IsNil(o.Ref) {
 		toSerialize["ref"] = o.Ref
+	}
+	if !IsNil(o.SourceSandboxId) {
+		toSerialize["sourceSandboxId"] = o.SourceSandboxId
 	}
 
 	for key, value := range o.AdditionalProperties {
@@ -738,6 +775,7 @@ func (o *SnapshotDto) UnmarshalJSON(data []byte) (err error) {
 		delete(additionalProperties, "regionIds")
 		delete(additionalProperties, "initialRunnerId")
 		delete(additionalProperties, "ref")
+		delete(additionalProperties, "sourceSandboxId")
 		o.AdditionalProperties = additionalProperties
 	}
 
