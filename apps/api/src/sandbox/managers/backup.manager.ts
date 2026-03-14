@@ -34,6 +34,9 @@ import { WithInstrumentation } from '../../common/decorators/otel.decorator'
 import { DockerRegistry } from '../../docker-registry/entities/docker-registry.entity'
 import { SandboxService } from '../services/sandbox.service'
 import { SandboxRepository } from '../repositories/sandbox.repository'
+import { JobService } from '../services/job.service'
+import { ResourceType } from '../enums/resource-type.enum'
+import { JobType } from '../enums/job-type.enum'
 
 @Injectable()
 export class BackupManager implements TrackableJobExecutions, OnApplicationShutdown {
@@ -50,6 +53,7 @@ export class BackupManager implements TrackableJobExecutions, OnApplicationShutd
     @InjectRedis() private readonly redis: Redis,
     private readonly redisLockProvider: RedisLockProvider,
     private readonly configService: TypedConfigService,
+    private readonly jobService: JobService,
   ) {}
 
   //  on init
@@ -109,6 +113,16 @@ export class BackupManager implements TrackableJobExecutions, OnApplicationShutd
               }
 
               try {
+                // Skip if a snapshot job is in progress for this sandbox
+                const snapshotJob = await this.jobService.findIncompleteJobForResource(
+                  ResourceType.SANDBOX,
+                  sandbox.id,
+                  sandbox.runnerId,
+                )
+                if (snapshotJob && snapshotJob.type === JobType.SNAPSHOT_SANDBOX) {
+                  return
+                }
+
                 //  todo: remove the catch handler asap
                 await this.setBackupPending(sandbox).catch((error) => {
                   if (error instanceof BadRequestError && error.message === 'A backup is already in progress') {
@@ -191,6 +205,18 @@ export class BackupManager implements TrackableJobExecutions, OnApplicationShutd
             const sandbox = await this.sandboxRepository.findOneByOrFail({
               id: s.id,
             })
+
+            // Skip if a snapshot job is in progress for this sandbox
+            if (sandbox.runnerId) {
+              const snapshotJob = await this.jobService.findIncompleteJobForResource(
+                ResourceType.SANDBOX,
+                sandbox.id,
+                sandbox.runnerId,
+              )
+              if (snapshotJob && snapshotJob.type === JobType.SNAPSHOT_SANDBOX) {
+                return
+              }
+            }
 
             try {
               switch (sandbox.backupState) {
@@ -464,6 +490,18 @@ export class BackupManager implements TrackableJobExecutions, OnApplicationShutd
   }
 
   private async handlePendingBackup(sandbox: Sandbox): Promise<void> {
+    // Skip if a snapshot job is in progress for this sandbox
+    if (sandbox.runnerId) {
+      const snapshotJob = await this.jobService.findIncompleteJobForResource(
+        ResourceType.SANDBOX,
+        sandbox.id,
+        sandbox.runnerId,
+      )
+      if (snapshotJob && snapshotJob.type === JobType.SNAPSHOT_SANDBOX) {
+        return
+      }
+    }
+
     const lockKey = `runner-${sandbox.runnerId}-backup-lock`
     try {
       await this.redisLockProvider.waitForLock(lockKey, 10)

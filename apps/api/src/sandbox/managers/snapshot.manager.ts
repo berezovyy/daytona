@@ -891,6 +891,12 @@ export class SnapshotManager implements TrackableJobExecutions, OnApplicationShu
   }
 
   async handleSnapshotStatePending(snapshot: Snapshot): Promise<SyncState> {
+    // Snapshots created from sandboxes are managed by the snapshot service directly,
+    // not by the cron-based sync. Skip to prevent interference.
+    if (snapshot.sourceSandboxId) {
+      return DONT_SYNC_AGAIN
+    }
+
     let initialRunner: Runner | undefined = undefined
 
     if (!snapshot.initialRunnerId) {

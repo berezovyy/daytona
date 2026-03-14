@@ -278,6 +278,15 @@ export class RunnerAdapterV0 implements RunnerAdapter {
     await this.sandboxApiClient.createBackup(sandbox.id, request)
   }
 
+  async snapshotSandbox(
+    _sandbox: Sandbox,
+    _snapshotName: string,
+    _snapshotId: string,
+    _registry: DockerRegistry,
+  ): Promise<void> {
+    throw new Error('snapshotSandbox is not supported for V0 runners')
+  }
+
   async buildSnapshot(
     buildInfo: BuildInfo,
     organizationId?: string,

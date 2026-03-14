@@ -5,7 +5,7 @@
 
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
-import { Repository, LessThan, EntityManager } from 'typeorm'
+import { Repository, LessThan, IsNull, EntityManager } from 'typeorm'
 import { Job } from '../entities/job.entity'
 import { JobDto, JobStatus, JobType, ResourceType } from '../dto/job.dto'
 import { ResourceTypeForJobType } from '../dto/job-type-map.dto'
@@ -295,6 +295,21 @@ export class JobService {
       page,
       totalPages: Math.ceil(total / limit),
     }
+  }
+
+  async findIncompleteJobForResource(
+    resourceType: ResourceType,
+    resourceId: string,
+    runnerId: string,
+  ): Promise<Job | null> {
+    return this.jobRepository.findOne({
+      where: {
+        resourceType,
+        resourceId,
+        runnerId,
+        completedAt: IsNull(),
+      },
+    })
   }
 
   async findJobsBySandboxId(sandboxId: string): Promise<Job[]> {

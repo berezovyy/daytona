@@ -4,6 +4,7 @@
  */
 
 import {
+  Inject,
   Injectable,
   NotFoundException,
   ConflictException,
@@ -50,6 +51,12 @@ import { RegionService } from '../../region/services/region.service'
 import { TypedConfigService } from '../../config/typed-config.service'
 import { SandboxRepository } from '../repositories/sandbox.repository'
 import { SnapshotActivatedEvent } from '../events/snapshot-activated.event'
+import { RunnerAdapterFactory } from '../runner-adapter/runnerAdapter'
+import { Sandbox } from '../entities/sandbox.entity'
+import { CreateSnapshotFromSandboxDto } from '../dto/create-snapshot-from-sandbox.dto'
+import { BackupState } from '../enums/backup-state.enum'
+import { ResourceType } from '../enums/resource-type.enum'
+import { JobService } from './job.service'
 
 const IMAGE_NAME_REGEX = /^[a-zA-Z0-9_.\-:]+(\/[a-zA-Z0-9_.\-:]+)*(@sha256:[a-f0-9]{64})?$/
 @Injectable()
@@ -76,6 +83,9 @@ export class SnapshotService {
     private readonly dockerRegistryService: DockerRegistryService,
     private readonly eventEmitter: EventEmitter2,
     private readonly configService: TypedConfigService,
+    @Inject(RunnerAdapterFactory)
+    private readonly runnerAdapterFactory: RunnerAdapterFactory,
+    private readonly jobService: JobService,
   ) {}
 
   private validateImageName(name: string): string | null {
@@ -320,6 +330,147 @@ export class SnapshotService {
     }
   }
 
+  async createFromSandbox(
+    organization: Organization,
+    sandbox: Sandbox,
+    createSnapshotFromSandboxDto: CreateSnapshotFromSandboxDto,
+  ) {
+    if (!organization.defaultRegionId) {
+      throw new DefaultRegionRequiredException()
+    }
+
+    let pendingSnapshotCountIncrement: number | undefined
+
+    try {
+      this.organizationService.assertOrganizationIsNotSuspended(organization)
+
+      // Validate sandbox state
+      if (sandbox.state !== SandboxState.STARTED && sandbox.state !== SandboxState.STOPPED) {
+        throw new BadRequestException(
+          `Sandbox must be in STARTED or STOPPED state to create a snapshot. Current state: ${sandbox.state}`,
+        )
+      }
+
+      // Validate sandbox has a runner
+      if (!sandbox.runnerId) {
+        throw new BadRequestException('Sandbox does not have an assigned runner')
+      }
+
+      // Check no pending/in-progress job exists for this sandbox
+      const existingJob = await this.jobService.findIncompleteJobForResource(
+        ResourceType.SANDBOX,
+        sandbox.id,
+        sandbox.runnerId,
+      )
+      if (existingJob) {
+        throw new ConflictException(
+          `Cannot snapshot sandbox: a '${existingJob.type}' operation is already in progress. Wait for it to complete before snapshotting.`,
+        )
+      }
+
+      // Check backup is not in progress
+      if (sandbox.backupState === BackupState.IN_PROGRESS || sandbox.backupState === BackupState.PENDING) {
+        throw new ConflictException(
+          `Cannot snapshot sandbox: a backup operation is in progress. Wait for the backup to complete before snapshotting.`,
+        )
+      }
+
+      const nameValidationError = this.validateSnapshotName(createSnapshotFromSandboxDto.name)
+      if (nameValidationError) {
+        throw new BadRequestException(nameValidationError)
+      }
+
+      const newSnapshotCount = 1
+
+      const { pendingSnapshotCountIncremented } = await this.validateOrganizationQuotas(
+        organization,
+        newSnapshotCount,
+        createSnapshotFromSandboxDto.cpu,
+        createSnapshotFromSandboxDto.memory,
+        createSnapshotFromSandboxDto.disk,
+      )
+
+      if (pendingSnapshotCountIncremented) {
+        pendingSnapshotCountIncrement = newSnapshotCount
+      }
+
+      const runner = await this.runnerService.findOneOrFail(sandbox.runnerId)
+
+      // Get internal registry for the runner's region
+      const internalRegistry = await this.dockerRegistryService.getAvailableInternalRegistry(runner.region)
+      if (!internalRegistry) {
+        throw new Error('No internal registry found for snapshot')
+      }
+
+      const registryUrl = internalRegistry.url.replace(/^(https?:\/\/)/, '')
+      const project = internalRegistry.project || 'daytona'
+      const timestamp = Date.now()
+      const snapshotRef = `${registryUrl}/${project}/sandbox-${sandbox.id}-${timestamp}:daytona`
+
+      const snapshotId = uuidv4()
+
+      const regionId = runner.region
+
+      const snapshot = this.snapshotRepository.create({
+        id: snapshotId,
+        organizationId: organization.id,
+        name: createSnapshotFromSandboxDto.name,
+        imageName: snapshotRef,
+        ref: snapshotRef,
+        state: SnapshotState.BUILDING,
+        cpu: createSnapshotFromSandboxDto.cpu,
+        gpu: createSnapshotFromSandboxDto.gpu,
+        mem: createSnapshotFromSandboxDto.memory,
+        disk: createSnapshotFromSandboxDto.disk,
+        sourceSandboxId: sandbox.id,
+        initialRunnerId: runner.id,
+        snapshotRegions: [{ snapshotId, regionId }],
+      })
+
+      try {
+        const savedSnapshot = await this.snapshotRepository.save(snapshot)
+
+        // Create SnapshotRunner record in BUILDING_SNAPSHOT state
+        await this.snapshotRunnerRepository.save(
+          this.snapshotRunnerRepository.create({
+            runnerId: runner.id,
+            snapshotRef: snapshotRef,
+            state: SnapshotRunnerState.BUILDING_SNAPSHOT,
+          }),
+        )
+
+        // Dispatch snapshot job via adapter
+        try {
+          const runnerAdapter = await this.runnerAdapterFactory.create(runner)
+          await runnerAdapter.snapshotSandbox(sandbox, snapshotRef, snapshotId, internalRegistry)
+        } catch (error) {
+          // Rollback on failure
+          await this.snapshotRepository.remove(savedSnapshot)
+          await this.snapshotRunnerRepository.delete({
+            runnerId: runner.id,
+            snapshotRef: snapshotRef,
+          })
+          throw error
+        }
+
+        this.eventEmitter.emit(SnapshotEvents.CREATED, new SnapshotCreatedEvent(savedSnapshot))
+
+        return savedSnapshot
+      } catch (error) {
+        if (error.code === '23505') {
+          // PostgreSQL unique violation error code
+          throw new ConflictException(
+            `Snapshot with name "${createSnapshotFromSandboxDto.name}" already exists for this organization`,
+          )
+        }
+        throw error
+      }
+    } catch (error) {
+      await this.rollbackPendingUsage(organization.id, pendingSnapshotCountIncrement)
+      throw error
+    }
+  }
+
   async removeSnapshot(snapshotId: string) {
     const snapshot = await this.snapshotRepository.findOne({
       where: { id: snapshotId },
@@ -339,17 +490,18 @@ export class SnapshotService {
     organizationId: string,
     page = 1,
     limit = 10,
-    filters?: { name?: string },
+    filters?: { name?: string; sourceSandboxId?: string },
     sort?: { field?: SnapshotSortField; direction?: SnapshotSortDirection },
   ): Promise<PaginatedList<Snapshot>> {
     const pageNum = Number(page)
     const limitNum = Number(limit)
 
-    const { name } = filters || {}
+    const { name, sourceSandboxId } = filters || {}
     const { field: sortField, direction: sortDirection } = sort || {}
 
     const baseFindOptions: FindOptionsWhere<Snapshot> = {
       ...(name ? { name: ILike(`%${name}%`) } : {}),
+      ...(sourceSandboxId ? { sourceSandboxId } : {}),
     }
 
     // Retrieve all snapshots belonging to the organization as well as all general snapshots

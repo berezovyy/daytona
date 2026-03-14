@@ -277,6 +277,35 @@ export class RunnerAdapterV2 implements RunnerAdapter {
     this.logger.debug(`Created CREATE_BACKUP job for sandbox ${sandbox.id} on runner ${this.runner.id}`)
   }
 
+  async snapshotSandbox(
+    sandbox: Sandbox,
+    snapshotName: string,
+    snapshotId: string,
+    registry: DockerRegistry,
+  ): Promise<void> {
+    const payload = {
+      snapshot: snapshotName,
+      snapshotId: snapshotId,
+      registry: {
+        url: registry.url.replace(/^(https?:\/\/)/, ''),
+        username: registry.username,
+        password: registry.password,
+        project: registry.project,
+      },
+    }
+
+    await this.jobService.createJob(
+      null,
+      JobType.SNAPSHOT_SANDBOX,
+      this.runner.id,
+      ResourceType.SANDBOX,
+      sandbox.id,
+      payload,
+    )
+
+    this.logger.debug(`Created SNAPSHOT_SANDBOX job for sandbox ${sandbox.id} on runner ${this.runner.id}`)
+  }
+
   async buildSnapshot(
     buildInfo: BuildInfo,
     organizationId?: string,
@@ -399,8 +428,12 @@ export class RunnerAdapterV2 implements RunnerAdapter {
       return false
     }
 
-    // If the latest job is PULL_SNAPSHOT or BUILD_SNAPSHOT, check if it completed successfully
-    if (latestJob.type === JobType.PULL_SNAPSHOT || latestJob.type === JobType.BUILD_SNAPSHOT) {
+    // If the latest job is PULL_SNAPSHOT, BUILD_SNAPSHOT, or SNAPSHOT_SANDBOX, check if it completed successfully
+    if (
+      latestJob.type === JobType.PULL_SNAPSHOT ||
+      latestJob.type === JobType.BUILD_SNAPSHOT ||
+      latestJob.type === JobType.SNAPSHOT_SANDBOX
+    ) {
       return latestJob.status === JobStatus.COMPLETED
     }
 
@@ -429,7 +462,11 @@ export class RunnerAdapterV2 implements RunnerAdapter {
 
     switch (latestJob.status) {
       case JobStatus.COMPLETED:
-        if (latestJob.type === JobType.PULL_SNAPSHOT || latestJob.type === JobType.BUILD_SNAPSHOT) {
+        if (
+          latestJob.type === JobType.PULL_SNAPSHOT ||
+          latestJob.type === JobType.BUILD_SNAPSHOT ||
+          latestJob.type === JobType.SNAPSHOT_SANDBOX
+        ) {
           return {
             name: latestJob.resourceId,
             sizeGB: metadata?.sizeGB,

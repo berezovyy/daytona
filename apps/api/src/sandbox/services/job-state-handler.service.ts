@@ -76,6 +76,9 @@ export class JobStateHandlerService {
       case JobType.REMOVE_SNAPSHOT:
         await this.handleRemoveSnapshotJobCompletion(job)
         break
+      case JobType.SNAPSHOT_SANDBOX:
+        await this.handleSnapshotSandboxJobCompletion(job)
+        break
       case JobType.CREATE_BACKUP:
         await this.handleCreateBackupJobCompletion(job)
         break
@@ -356,6 +359,89 @@ export class JobStateHandlerService {
       }
     } catch (error) {
       this.logger.error(`Error handling BUILD_SNAPSHOT job completion for snapshot ref ${snapshotRef}:`, error)
+    }
+  }
+
+  private async handleSnapshotSandboxJobCompletion(job: Job): Promise<void> {
+    let snapshotId: string | undefined
+    try {
+      const payload = typeof job.payload === 'string' ? JSON.parse(job.payload) : job.payload
+      snapshotId = payload?.snapshotId
+    } catch {
+      this.logger.error(`Failed to parse payload for SNAPSHOT_SANDBOX job ${job.id}`)
+      return
+    }
+
+    if (!snapshotId) {
+      this.logger.warn(`No snapshotId found in payload for SNAPSHOT_SANDBOX job ${job.id}`)
+      return
+    }
+
+    try {
+      const snapshot = await this.snapshotRepository.findOne({ where: { id: snapshotId } })
+      if (!snapshot) {
+        this.logger.warn(`Snapshot ${snapshotId} not found for SNAPSHOT_SANDBOX job ${job.id}`)
+        return
+      }
+
+      const snapshotRunner = await this.snapshotRunnerRepository.findOne({
+        where: { snapshotRef: snapshot.ref, runnerId: job.runnerId },
+      })
+
+      if (job.status === JobStatus.COMPLETED) {
+        this.logger.debug(`SNAPSHOT_SANDBOX job ${job.id} completed successfully for snapshot ${snapshotId}`)
+
+        if (snapshot.state === SnapshotState.PENDING || snapshot.state === SnapshotState.BUILDING) {
+          const metadata = job.getResultMetadata()
+          snapshot.state = SnapshotState.ACTIVE
+          snapshot.errorReason = null
+          snapshot.lastUsedAt = new Date()
+
+          if (metadata?.sizeGB != null) {
+            snapshot.size = metadata.sizeGB
+          }
+          if (metadata?.entrypoint != null) {
+            snapshot.entrypoint = metadata.entrypoint
+          }
+
+          await this.snapshotRepository.save(snapshot)
+          this.logger.debug(`Marked snapshot ${snapshot.id} as ACTIVE after snapshot-from-sandbox completed`)
+        }
+
+        if (snapshotRunner) {
+          snapshotRunner.state = SnapshotRunnerState.READY
+          snapshotRunner.errorReason = null
+          await this.snapshotRunnerRepository.save(snapshotRunner)
+        }
+      } else if (job.status === JobStatus.FAILED) {
+        this.logger.error(`SNAPSHOT_SANDBOX job ${job.id} failed for snapshot ${snapshotId}: ${job.errorMessage}`)
+
+        if (snapshot.state === SnapshotState.PENDING || snapshot.state === SnapshotState.BUILDING) {
+          snapshot.state = SnapshotState.ERROR
+          snapshot.errorReason = job.errorMessage || 'Failed to create snapshot from sandbox'
+          await this.snapshotRepository.save(snapshot)
+        }
+
+        if (snapshotRunner) {
+          snapshotRunner.state = SnapshotRunnerState.ERROR
+          snapshotRunner.errorReason = job.errorMessage || 'Failed to create snapshot from sandbox'
+          await this.snapshotRunnerRepository.save(snapshotRunner)
+        }
+
+        // Rollback pending snapshot usage
+        if (snapshot.organizationId) {
+          try {
+            await this.organizationUsageService.decrementPendingSnapshotUsage(snapshot.organizationId, 1)
+          } catch (error) {
+            this.logger.error(
+              `Error rolling back pending snapshot usage for organization ${snapshot.organizationId}:`,
+              error,
+            )
+          }
+        }
+      }
+    } catch (error) {
+      this.logger.error(`Error handling SNAPSHOT_SANDBOX job completion for snapshot ${snapshotId}:`, error)
     }
   }
 
