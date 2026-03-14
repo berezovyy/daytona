@@ -15,6 +15,7 @@ import (
 type RowData struct {
 	Name      string
 	State     string
+	Branch    string
 	Region    string
 	Class     string
 	LastEvent string
@@ -26,7 +27,7 @@ func ListSandboxes(sandboxList []apiclient.Sandbox, activeOrganizationName *stri
 		return
 	}
 
-	headers := []string{"Sandbox", "State", "Region", "Class", "Last Event"}
+	headers := []string{"Sandbox", "State", "Branch", "Region", "Class", "Last Event"}
 
 	data := [][]string{}
 
@@ -63,10 +64,14 @@ func SortSandboxes(sandboxList *[]apiclient.Sandbox) {
 }
 
 func getTableRowData(sandbox apiclient.Sandbox) *RowData {
-	rowData := RowData{"", "", "", "", ""}
+	rowData := RowData{"", "", "", "", "", ""}
 	rowData.Name = sandbox.Id + util.AdditionalPropertyPadding
 	if sandbox.State != nil {
 		rowData.State = getStateLabel(*sandbox.State)
+	}
+
+	if branch, ok := sandbox.Labels["daytona.io/git-branch"]; ok {
+		rowData.Branch = branch
 	}
 
 	rowData.Region = sandbox.Target
@@ -96,6 +101,7 @@ func getRowFromRowData(rowData RowData) []string {
 	row := []string{
 		common.NameStyle.Render(rowData.Name),
 		rowData.State,
+		common.DefaultRowDataStyle.Render(rowData.Branch),
 		common.DefaultRowDataStyle.Render(rowData.Region),
 		common.DefaultRowDataStyle.Render(rowData.Class),
 		common.DefaultRowDataStyle.Render(rowData.LastEvent),

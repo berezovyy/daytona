@@ -14,6 +14,8 @@ export type {
 } from './Daytona'
 export { FileSystem } from './FileSystem'
 export { Git } from './Git'
+export { GitBridge } from './GitBridge'
+export type { GitBridgeSetupParams, GitBridgePushParams } from './GitBridge'
 export { LspLanguageId } from './LspServer'
 export { Process } from './Process'
 // export { LspServer } from './LspServer'

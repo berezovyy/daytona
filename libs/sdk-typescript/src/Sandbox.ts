@@ -39,6 +39,7 @@ import { AxiosInstance } from 'axios'
 import { CodeInterpreter } from './CodeInterpreter'
 import { WithInstrumentation } from './utils/otel.decorator'
 import { VolumeMount } from './Daytona'
+import { GitBridge } from './GitBridge'
 
 /**
  * Interface defining methods that a code toolbox must implement
@@ -125,6 +126,7 @@ export interface ForkSandboxParams {
 export class Sandbox implements SandboxDto {
   public readonly fs: FileSystem
   public readonly git: Git
+  public readonly gitBridge: GitBridge
   public readonly process: Process
   public readonly computerUse: ComputerUse
   public readonly codeInterpreter: CodeInterpreter
@@ -192,6 +194,7 @@ export class Sandbox implements SandboxDto {
 
     this.fs = new FileSystem(this.clientConfig, new FileSystemApi(this.clientConfig, '', this.axiosInstance))
     this.git = new Git(new GitApi(this.clientConfig, '', this.axiosInstance))
+    this.gitBridge = new GitBridge(this)
     this.process = new Process(
       this.clientConfig,
       this.codeToolbox,
