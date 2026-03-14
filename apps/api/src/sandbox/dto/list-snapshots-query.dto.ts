@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0
  */
 
-import { ApiProperty, ApiSchema } from '@nestjs/swagger'
+import { ApiProperty, ApiPropertyOptional, ApiSchema } from '@nestjs/swagger'
 import { IsOptional, IsString, IsEnum } from 'class-validator'
 import { PageNumber } from '../../common/decorators/page-number.decorator'
 import { PageLimit } from '../../common/decorators/page-limit.decorator'
@@ -60,4 +60,9 @@ export class ListSnapshotsQueryDto {
   @IsOptional()
   @IsEnum(SnapshotSortDirection)
   order = SnapshotSortDirection.DESC
+
+  @ApiPropertyOptional({ description: 'Filter by source sandbox ID' })
+  @IsOptional()
+  @IsString()
+  sourceSandboxId?: string
 }

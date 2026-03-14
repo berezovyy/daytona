@@ -89,6 +89,11 @@ export class SnapshotDto {
   @IsOptional()
   ref?: string
 
+  @ApiPropertyOptional({
+    description: 'ID of the sandbox this snapshot was created from, if applicable',
+  })
+  sourceSandboxId?: string
+
   static fromSnapshot(snapshot: Snapshot): SnapshotDto {
     return {
       id: snapshot.id,
@@ -119,6 +124,7 @@ export class SnapshotDto {
       regionIds: snapshot.snapshotRegions?.map((sr) => sr.regionId) ?? undefined,
       initialRunnerId: snapshot.initialRunnerId,
       ref: snapshot.ref,
+      sourceSandboxId: snapshot.sourceSandboxId,
     }
   }
 }
